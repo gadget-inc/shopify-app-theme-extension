@@ -2,7 +2,7 @@
 const api = new Gadget();
 
 // query Gadget for the recommended products based on quiz answers, using a JS query
-async function fetchRecommendedProducts(answerIds) {
+const fetchRecommendedProducts = async (answerIds) => {
   const queryIdFilter = answerIds.map((answerId) => {
     return { id: { equals: answerId } };
   });
@@ -32,15 +32,16 @@ async function fetchRecommendedProducts(answerIds) {
   });
 
   return recommendedProducts;
-}
+};
 
 // fetch the quiz questions and answers to be presented to shoppers, using a GraphQL query
-async function fetchQuiz(quizSlug) {
-  const quiz = api.quiz.findFirst({
+const fetchQuiz = async (quizSlug) => {
+  const quiz = await api.quiz.findFirst({
     filter: {
       slug: { equals: quizSlug },
     },
     select: {
+      id: true,
       title: true,
       body: true,
       questions: {
@@ -63,10 +64,10 @@ async function fetchQuiz(quizSlug) {
   });
 
   return quiz;
-}
+};
 
 // save the shopper's email and recommended productions to Gadget (for follow-up emails!)
-async function saveSelections(email, recommendedProducts) {
+const saveSelections = async (quizId, email, recommendedProducts) => {
   const productsQuery = recommendedProducts.map((rp) => {
     return {
       create: {
@@ -78,25 +79,25 @@ async function saveSelections(email, recommendedProducts) {
   });
   await api.quizResult.create({
     quiz: {
-      _link: window.quizId,
+      _link: quizId,
     },
     email: email,
     shopperSuggestions: [...productsQuery],
   });
-}
+};
 
-async function onSubmitHandler(evt) {
+const onSubmitHandler = async (evt, quizId) => {
   evt.preventDefault();
 
   const email = document.getElementById("product-quiz__email").value;
 
-  const submitButton = this.querySelector(".product-quiz__submit");
+  const submitButton = document.querySelector(".product-quiz__submit");
   submitButton.classList.add("disabled");
 
   const recommendedProducts = await fetchRecommendedProducts(selectedAnswers);
 
   // save email and recommendations to Gadget for follow-up emails
-  await saveSelections(email, recommendedProducts);
+  await saveSelections(quizId, email, recommendedProducts);
 
   // display recommendations
   let recommendedProductHTML =
@@ -116,17 +117,19 @@ async function onSubmitHandler(evt) {
   document.getElementById("questions").innerHTML = recommendedProductHTML;
 
   submitButton.classList.add("hidden");
-  this.querySelector(".product-quiz__submit-hr").classList.add("hidden");
-  this.querySelector(".product-quiz__email-container").classList.add("hidden");
-}
+  document.querySelector(".product-quiz__submit-hr").classList.add("hidden");
+  document
+    .querySelector(".product-quiz__email-container")
+    .classList.add("hidden");
+};
 
 let selectedAnswers = [];
-function selectAnswer(answerId, answerText) {
+const selectAnswer = (evt, answerId, answerText) => {
   selectedAnswers.push(answerId);
-  let elId = event.srcElement.id;
+  let elId = evt.srcElement.id;
   let parent = document.getElementById(elId).parentNode;
   parent.innerHTML = "<h3><b>" + decodeURI(answerText) + "</b> selected</h3>";
-}
+};
 
 document.addEventListener("DOMContentLoaded", function () {
   var quizSlug = window.quizSlug;
@@ -154,7 +157,7 @@ document.addEventListener("DOMContentLoaded", function () {
               ".product-quiz__question-answer"
             );
 
-            const renderedQuestions = questions.forEach((question, i) => {
+            questions.forEach((question, i) => {
               const clonedDiv = questionContainer.cloneNode(true);
               clonedDiv.id = "question_" + i;
               clonedDiv.insertAdjacentHTML(
@@ -171,21 +174,20 @@ document.addEventListener("DOMContentLoaded", function () {
                 clonedSpan.id = "answer_" + i + "_" + j;
                 clonedSpan.insertAdjacentHTML(
                   "beforeend",
-                  `<span><button class="button answer" id="${
-                    clonedSpan.id
-                  }" onClick=(selectAnswer(${
-                    answer.node.id
-                  },"${encodeURIComponent(answer.node.text)}"))>${
-                    answer.node.text
-                  }</button></span>`
+                  `<span><button class="button answer" id="${clonedSpan.id}">${answer.node.text}</button></span>`
                 );
+                clonedSpan.addEventListener("click", (evt) => {
+                  selectAnswer(evt, answer.node.id, answer.node.text);
+                });
                 this.querySelector(`.product-quiz__answers_${i}`).appendChild(
                   clonedSpan
                 );
               });
             });
 
-            this.form.addEventListener("submit", onSubmitHandler);
+            this.form.addEventListener("submit", async function (evt) {
+              await onSubmitHandler(evt, quiz.id);
+            });
           }
         }
       );
